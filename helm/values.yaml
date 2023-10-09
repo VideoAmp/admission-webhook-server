@@ -14,7 +14,7 @@
 #
 # Examples:
 #   devel: node-role.kubernetes.io/development=true, beta.kubernetes.io/instance-type=t3.large
-podNodesSelectorConfig:
+podNodesSelectorConfig: "default: purpose=default"
 
 service:
   # the service is important. It forms part of the CN for SSL certificate.

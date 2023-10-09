@@ -12,7 +12,7 @@ import (
 	"net/http"
 
 	"github.com/liangrog/admission-webhook-server/pkg/utils"
-	v1 "k8s.io/api/admission/v1"
+	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -41,7 +41,7 @@ type PatchOperation struct {
 
 // admitFunc is a callback for admission controller logic. Given an AdmissionRequest, it returns the sequence of patch
 // operations to be applied in case of success, or the error that will be shown when the operation is rejected.
-type AdmitFunc func(*v1.AdmissionRequest) ([]PatchOperation, error)
+type AdmitFunc func(*admissionv1.AdmissionRequest) ([]PatchOperation, error)
 
 // Get server base path
 func GetBasePath() string {
@@ -73,8 +73,6 @@ func doServeAdmitFunc(w http.ResponseWriter, r *http.Request, adm AdmitFunc) ([]
 		return nil, fmt.Errorf("could not read request body: %v", err)
 	}
 
-	log.Printf("%s\n", body)
-
 	if contentType := r.Header.Get("Content-Type"); contentType != jsonContentType {
 		w.WriteHeader(http.StatusBadRequest)
 		return nil, fmt.Errorf("unsupported content type %s, only %s is supported", contentType, jsonContentType)
@@ -82,7 +80,7 @@ func doServeAdmitFunc(w http.ResponseWriter, r *http.Request, adm AdmitFunc) ([]
 
 	// Step 2: Parse the AdmissionReview request.
 
-	var admissionReviewReq v1.AdmissionReview
+	var admissionReviewReq admissionv1.AdmissionReview
 
 	if _, _, err := UniversalDeserializer.Decode(body, nil, &admissionReviewReq); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -94,8 +92,12 @@ func doServeAdmitFunc(w http.ResponseWriter, r *http.Request, adm AdmitFunc) ([]
 
 	// Step 3: Construct the AdmissionReview response.
 
-	admissionReviewResponse := v1.AdmissionReview{
-		Response: &v1.AdmissionResponse{
+	admissionReviewResponse := admissionv1.AdmissionReview{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "AdmissionReview",
+			APIVersion: "admission.k8s.io/v1",
+		},
+		Response: &admissionv1.AdmissionResponse{
 			UID: admissionReviewReq.Request.UID,
 		},
 	}
@@ -116,14 +118,25 @@ func doServeAdmitFunc(w http.ResponseWriter, r *http.Request, adm AdmitFunc) ([]
 		}
 	} else {
 		// Otherwise, encode the patch operations to JSON and return a positive response.
-		patchBytes, err := json.Marshal(patchOps)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return nil, fmt.Errorf("could not marshal JSON patch: %v", err)
+		if len(patchOps) > 0 {
+			log.Printf("patchOps is non-zero length: ")
+			log.Print(patchOps)
+			patchBytes, err := json.Marshal(patchOps)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return nil, fmt.Errorf("could not marshal JSON patch: %v", err)
+			}
+
+			patchType := admissionv1.PatchTypeJSONPatch
+
+			admissionReviewResponse.Response.Patch = patchBytes
+			admissionReviewResponse.Response.PatchType = &patchType
+		} else {
+			// no patch
+			log.Print("No patches to be applied")
 		}
 
 		admissionReviewResponse.Response.Allowed = true
-		admissionReviewResponse.Response.Patch = patchBytes
 	}
 
 	// Return the AdmissionReview with a response as JSON.
@@ -131,8 +144,6 @@ func doServeAdmitFunc(w http.ResponseWriter, r *http.Request, adm AdmitFunc) ([]
 	if err != nil {
 		return nil, fmt.Errorf("marshaling response: %v", err)
 	}
-
-	log.Printf("%s\n", bytes)
 
 	return bytes, nil
 }
