@@ -12,7 +12,7 @@ import (
 	"net/http"
 
 	"github.com/liangrog/admission-webhook-server/pkg/utils"
-	"k8s.io/api/admission/v1beta1"
+	v1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -41,7 +41,7 @@ type PatchOperation struct {
 
 // admitFunc is a callback for admission controller logic. Given an AdmissionRequest, it returns the sequence of patch
 // operations to be applied in case of success, or the error that will be shown when the operation is rejected.
-type AdmitFunc func(*v1beta1.AdmissionRequest) ([]PatchOperation, error)
+type AdmitFunc func(*v1.AdmissionRequest) ([]PatchOperation, error)
 
 // Get server base path
 func GetBasePath() string {
@@ -65,10 +65,15 @@ func doServeAdmitFunc(w http.ResponseWriter, r *http.Request, adm AdmitFunc) ([]
 	}
 
 	body, err := ioutil.ReadAll(r.Body)
+
+	log.Printf("%s\n", body)
+
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return nil, fmt.Errorf("could not read request body: %v", err)
 	}
+
+	log.Printf("%s\n", body)
 
 	if contentType := r.Header.Get("Content-Type"); contentType != jsonContentType {
 		w.WriteHeader(http.StatusBadRequest)
@@ -77,7 +82,7 @@ func doServeAdmitFunc(w http.ResponseWriter, r *http.Request, adm AdmitFunc) ([]
 
 	// Step 2: Parse the AdmissionReview request.
 
-	var admissionReviewReq v1beta1.AdmissionReview
+	var admissionReviewReq v1.AdmissionReview
 
 	if _, _, err := UniversalDeserializer.Decode(body, nil, &admissionReviewReq); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -89,8 +94,8 @@ func doServeAdmitFunc(w http.ResponseWriter, r *http.Request, adm AdmitFunc) ([]
 
 	// Step 3: Construct the AdmissionReview response.
 
-	admissionReviewResponse := v1beta1.AdmissionReview{
-		Response: &v1beta1.AdmissionResponse{
+	admissionReviewResponse := v1.AdmissionReview{
+		Response: &v1.AdmissionResponse{
 			UID: admissionReviewReq.Request.UID,
 		},
 	}
@@ -127,12 +132,14 @@ func doServeAdmitFunc(w http.ResponseWriter, r *http.Request, adm AdmitFunc) ([]
 		return nil, fmt.Errorf("marshaling response: %v", err)
 	}
 
+	log.Printf("%s\n", bytes)
+
 	return bytes, nil
 }
 
 // serveAdmitFunc is a wrapper around doServeAdmitFunc that adds error handling and logging.
 func serveAdmitFunc(w http.ResponseWriter, r *http.Request, adm AdmitFunc) {
-	//log.Print("Handling webhook request ...")
+	log.Print("Handling webhook request ...")
 
 	var writeErr error
 	if bytes, err := doServeAdmitFunc(w, r, adm); err != nil {
@@ -140,8 +147,9 @@ func serveAdmitFunc(w http.ResponseWriter, r *http.Request, adm AdmitFunc) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, writeErr = w.Write([]byte(err.Error()))
 	} else {
-		//log.Print("Webhook request handled successfully")
+		log.Printf("%s\n", bytes)
 		_, writeErr = w.Write(bytes)
+		log.Print("Webhook request handled successfully")
 	}
 
 	if writeErr != nil {

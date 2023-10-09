@@ -5,28 +5,28 @@
 # Override url base path. Default to mutate
 #basePathOverride:
 
-# PodNodesSelector   
+# PodNodesSelector
 # Override podnodeselector handler path. Default to pod-nodes-selector
-#podNodesSelectorPathOverride: 
+#podNodesSelectorPathOverride:
 # Confiruation for podnodesselector. The namespace and labels are set here following the format:
 #   namespace: key=label,key=label; namespace2: key=label
 # Note: Multiple namespaces seperate by ;
 #
 # Examples:
 #   devel: node-role.kubernetes.io/development=true, beta.kubernetes.io/instance-type=t3.large
-podNodesSelectorConfig: 
+podNodesSelectorConfig:
 
 service:
-  # the service is important. It forms part of the CN for SSL certificate. 
+  # the service is important. It forms part of the CN for SSL certificate.
   name: admission-webhook
-  #type: 
+  #type:
   annotations: {}
 
-replicas: 1  
+replicas: 2
 
-strategy: 
+strategy:
   type: RollingUpdate
 
-image: liangrog/admission-webhook-server
+image: 192.168.101.37:5000/admission-webhook-server
 imageTag: latest
-imagePullPolicy: Always 
+imagePullPolicy: Always

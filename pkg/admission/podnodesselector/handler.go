@@ -15,7 +15,7 @@ import (
 
 	"github.com/liangrog/admission-webhook-server/pkg/admission/admit"
 	"github.com/liangrog/admission-webhook-server/pkg/utils"
-	"k8s.io/api/admission/v1beta1"
+	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -59,7 +59,7 @@ func Register(mux *http.ServeMux) {
 }
 
 // Handling pod node selector request
-func handler(req *v1beta1.AdmissionRequest) ([]admit.PatchOperation, error) {
+func handler(req *v1.AdmissionRequest) ([]admit.PatchOperation, error) {
 	if req.Resource != podResource {
 		log.Printf("Ignore admission request %s as it's not a pod resource", string(req.UID))
 		return nil, nil
@@ -74,6 +74,8 @@ func handler(req *v1beta1.AdmissionRequest) ([]admit.PatchOperation, error) {
 
 	// Get the pod name for info
 	podName := strings.TrimSpace(pod.Name + " " + pod.GenerateName)
+
+	log.Printf("Handling pod %s", podName)
 
 	var patches []admit.PatchOperation
 
@@ -117,6 +119,7 @@ func handler(req *v1beta1.AdmissionRequest) ([]admit.PatchOperation, error) {
 func getConfiguredSelectorMap() (map[string]labels.Set, error) {
 	// Don't process if no configuration is set
 	if len(os.Getenv(ENV_POD_NODES_SELECTOR_CONFIG)) == 0 {
+		log.Printf("ENV_POD_NODES_SELECTOR_CONFIG unset!")
 		return nil, nil
 	}
 
